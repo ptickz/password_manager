@@ -2,46 +2,68 @@ package cmd
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
-	"password_manager/cmd/utils"
+	"password_manager/cmd/storage"
+	"password_manager/cmd/subActions"
 	"strconv"
 	"strings"
 	"syscall"
 
+	"github.com/alexmullins/zip"
 	"golang.org/x/term"
 
 	"github.com/spf13/cobra"
 )
 
 const ListEntries = 1
-const AddEntry = 2
-const GetEntry = 3
+const GetEntry = 2
+const AddEntry = 3
 const DeleteEntry = 4
 const ChangeMasterPassword = 5
+const ShowNavigation = 9
 const Exit = 0
 
-var rootCmd = &cobra.Command{
+type Command struct {
+	Storage storage.Storage
+}
+
+var RootCmd = &cobra.Command{
 	Use:   "password_manager",
 	Short: "Password storage and generator",
 	Long:  ``,
-	Run: func(cmd *cobra.Command, args []string) {
-		if !utils.CheckStorageEntryExists() {
-			setupMasterPassword()
-		}
-		err := enterStorageWithMasterPassword()
+	Run:   main,
+}
+
+func main(cmd *cobra.Command, args []string) {
+	s := storage.GetStorage()
+	c := Command{
+		Storage: s,
+	}
+	init, err := s.CheckStorageInitiated()
+	if err != nil {
+		panic(err)
+	}
+	if !init {
+		c.setupMasterPassword()
+	}
+	b := c.enterStorageWithMasterPassword()
+	if !b {
+		fmt.Println("Wrong password")
+		return
+	}
+	c.showNavigation()
+	for exit := false; !exit; {
+		fmt.Println("Select action: ")
+		exit, err = c.processAction()
 		if err != nil {
 			fmt.Println(err)
 		}
-		showNavigation()
-		for exit := false; !exit; {
-			fmt.Println("Select action: ")
-			exit, err = awaitAction()
-		}
-	},
+	}
 }
 
-func awaitAction() (bool, error) {
+func (c Command) processAction() (bool, error) {
 	reader := bufio.NewReader(os.Stdin)
 	input, _ := reader.ReadString('\n')
 	u64Input, err := strconv.ParseUint(
@@ -57,19 +79,31 @@ func awaitAction() (bool, error) {
 
 	switch uint(u64Input) {
 	case ListEntries:
-		fmt.Println("List entries")
+		err = subActions.GetListFromStorage()
+		printLongSeparator()
+		if err != nil {
+			fmt.Println(err)
+			return false, err
+		}
 		return false, nil
 	case AddEntry:
+		err = subActions.CreateEntry()
 		fmt.Println("Add entry")
 		return false, nil
 	case GetEntry:
+		//err = subActions.GetEntryForProfile()
 		fmt.Println("Get entry")
 		return false, nil
 	case DeleteEntry:
+		//err = subActions.DeleteEntryForProfile()
 		fmt.Println("Delete entry")
 		return false, nil
 	case ChangeMasterPassword:
+		//err = subActions.ChangeMasterPassword()
 		fmt.Println("Change master password")
+		return false, nil
+	case ShowNavigation:
+		c.showNavigation()
 		return false, nil
 	case Exit:
 		fmt.Println("Exit")
@@ -80,18 +114,32 @@ func awaitAction() (bool, error) {
 	}
 }
 
-func enterStorageWithMasterPassword() error {
+func (c Command) enterStorageWithMasterPassword() bool {
 	fmt.Println("Enter password. Ctrl+C to exit")
-
-	return nil
+	byteInput, err := term.ReadPassword(syscall.Stdin)
+	password := string(byteInput)
+	_, err = storage.CheckPasswordValid(password)
+	if err != nil {
+		if !errors.Is(err, zip.ErrPassword) {
+			fmt.Println(err)
+		}
+		return false
+	}
+	return true
 }
 
-func showNavigation() {
-	fmt.Printf("Available actions:\n\n" + "1. List entries\n" + "2. Add entry\n" + "3. Get entry\n" +
-		"4. Delete entry\n" + "5. Change master password\n" + "0. Exit\n\n\n")
+func (c Command) showNavigation() {
+	fmt.Printf("Available actions:\n\n" +
+		strconv.Itoa(ListEntries) + " - List entries for profile\n" +
+		strconv.Itoa(AddEntry) + "- Add entry for profile\n" +
+		strconv.Itoa(GetEntry) + " - Get entry for profile\n" +
+		strconv.Itoa(DeleteEntry) + " - Delete entry for profile\n" +
+		strconv.Itoa(ChangeMasterPassword) + " - Change master password\n" +
+		strconv.Itoa(ShowNavigation) + " - Show navigation\n" +
+		strconv.Itoa(Exit) + " - Exit\n\n")
 }
 
-func setupMasterPassword() {
+func (c Command) setupMasterPassword() {
 	password := ""
 	successfulPasswordSetup := false
 	for successfulPasswordSetup == false {
@@ -104,29 +152,29 @@ func setupMasterPassword() {
 			repeatPassword := string(repeatByteInput)
 			if password == repeatPassword {
 				fmt.Println("Password accepted")
+				printLongSeparator()
 				return password, true
 			} else {
-				fmt.Println("Passwords not matching, try again\n----------------------------------------------------")
+				fmt.Println("Passwords not matching, try again")
+				printLongSeparator()
 				return password, false
 			}
 		}
 		password, successfulPasswordSetup = f()
 	}
-	err := utils.WriteStorageData(map[string]string{
-		"master": password,
-	})
+	err := storage.WriteSetupStorageData(password)
 	if err != nil {
 		fmt.Println(err)
 	}
 }
 
 func Execute() {
-	err := rootCmd.Execute()
+	err := RootCmd.Execute()
 	if err != nil {
 		os.Exit(1)
 	}
 }
 
-func init() {
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+func printLongSeparator() {
+	fmt.Println("\n----------------------------------------------------")
 }
