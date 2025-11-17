@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"os"
@@ -12,8 +11,6 @@ import (
 
 	"github.com/alexmullins/zip"
 )
-
-var MasterPassword string
 
 type Processor interface {
 	Init(string) error
@@ -54,9 +51,8 @@ func GetStorage() Storage {
 }
 
 func (s Storage) Init(password string) error {
-	MasterPassword = password
 	if _, err := os.Stat(s.DirPath); errors.Is(err, os.ErrNotExist) {
-		err = os.Mkdir(Path, os.ModePerm)
+		err = os.Mkdir(s.DirPath, os.ModePerm)
 		if err != nil {
 			return err
 		}
@@ -90,7 +86,16 @@ func (s Storage) Init(password string) error {
 }
 
 func (s Storage) CheckStorageInitiated() (bool, error) {
-	return false, err
+	_, err := os.Stat(filepath.Join(s.DirPath, s.ZipFile))
+
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		} else {
+			return false, err
+		}
+	}
+	return true, nil
 }
 
 func (s Storage) CheckAccess(password string) (bool, error) {
@@ -136,40 +141,14 @@ func (s Storage) ReadEntries() (*Entries, error) {
 }
 
 func (s Storage) ReadEntry(id uint) (*Entry, error) {
-	r, err := zip.OpenReader(Path + DirectorySeparator + ZipFile)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer func(r *zip.ReadCloser) {
-		err = r.Close()
-		if err != nil {
-			log.Fatal(err)
-		}
-	}(r)
+	b, err := s.extractStorageData()
+	if err == nil && b != nil {
+		var data Entry
 
-	for _, f := range r.File {
-		f.SetPassword(MasterPassword)
-		var rc io.ReadCloser
-		rc, err = f.Open()
-		if err != nil {
-			log.Fatal(err)
-		}
-		err = rc.Close()
-		if err != nil {
-			fmt.Println(err)
-		}
+		return &data, nil
 	}
-}
 
-func (s Storage) CheckStorageEntryExists() bool {
-	_, err := os.Stat(Path + DirectorySeparator + ZipFile)
-	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			fmt.Println(err)
-		}
-		return false
-	}
-	return true
+	return nil, err
 }
 
 func (s Storage) WriteEntry(data *Entry) error {
@@ -189,9 +168,11 @@ func (s Storage) ChangeMasterPassword(password string) error {
 }
 
 func (s Storage) extractStorageData() (*bytes.Buffer, error) {
-	if _, err := os.Stat(filepath.Join(s.DirPath, s.ZipFile)); errors.Is(err, os.ErrNotExist) {
-		return nil, errors.New("storage file doesnt exist")
+	init, err := s.CheckStorageInitiated()
+	if err != nil || !init {
+		return nil, err
 	}
+
 	r, err := zip.OpenReader(filepath.Join(s.DirPath, s.ZipFile))
 	if err == nil {
 		defer func(r *zip.ReadCloser) {
@@ -202,22 +183,31 @@ func (s Storage) extractStorageData() (*bytes.Buffer, error) {
 			}
 		}(r)
 
-		f := r.File[0]
-		f.SetPassword(*s.MasterPassword)
-		var rc io.ReadCloser
-		rc, err = f.Open()
-		if err == nil {
-			defer func(rc io.ReadCloser) {
-				err = rc.Close()
-				if err != nil {
-					log.Fatal(err)
-				}
-			}(rc)
+		var f *zip.File
+		for _, v := range r.File {
+			if v.Name == s.DataFile {
+				//ensure filename is correct
+				f = v
+			}
+		}
 
-			var b bytes.Buffer
-			_, err = io.Copy(&b, rc)
+		if f != nil {
+			f.SetPassword(*s.MasterPassword)
+			var rc io.ReadCloser
+			rc, err = f.Open()
+			if err == nil {
+				defer func(rc io.ReadCloser) {
+					err = rc.Close()
+					if err != nil {
+						log.Fatal(err)
+					}
+				}(rc)
 
-			return &b, err
+				var b bytes.Buffer
+				_, err = io.Copy(&b, rc)
+
+				return &b, err
+			}
 		}
 	}
 
