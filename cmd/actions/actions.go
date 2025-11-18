@@ -1,61 +1,54 @@
 package actions
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"os"
 	"password_manager/cmd/storage"
 	"strconv"
-	"strings"
 	"syscall"
 
 	"github.com/alexmullins/zip"
 	"golang.org/x/term"
 )
 
-const listEntries = 1
-const getEntry = 2
-const addEntry = 3
-const deleteEntry = 4
-const changeMasterPassword = 5
-const showNavigation = 9
-const exit = 0
+const listEntries int = 1
+const getEntry int = 2
+const addEntry int = 3
+const deleteEntry int = 4
+const changeMasterPassword int = 5
+const showNavigation int = 9
+const exit int = 0
 
 type Command struct {
 	Storage storage.Storage
 }
 
-func (c Command) createEntry() error {
-	//TODO implepent
-	return err
+func (c Command) createEntry() {
+	fmt.Println("Creating entry...")
 }
 
-func (c Command) getEntriesFromStorage() error {
-	//TODO implement
-	return err
+func (c Command) getEntriesFromStorage() {
+	fmt.Println("Getting entries from storage...")
 }
 
-func (c Command) getEntry() error {
-	//TODO implement
-	return err
+func (c Command) getEntry() {
+	fmt.Println("Getting entry...")
 }
 
-func (c Command) deleteEntry() error {
-	//TODO implement
-	return err
+func (c Command) deleteEntry() {
+	fmt.Println("Deleting entry...")
 }
 
-func (c Command) changeMasterPassword() error {
-	//TODO implement
-	return err
+func (c Command) changeMasterPassword() {
+	fmt.Println("Changing master password...")
 }
 
-func (c Command) showNavigation() {
+func (c Command) ShowNavigation() {
 	fmt.Printf("Available actions:\n\n" +
 		strconv.Itoa(listEntries) + " - List entries for profile\n" +
-		strconv.Itoa(addEntry) + "- Add entry for profile\n" +
 		strconv.Itoa(getEntry) + " - Get entry for profile\n" +
+		strconv.Itoa(addEntry) + "- Add entry for profile\n" +
 		strconv.Itoa(deleteEntry) + " - Delete entry for profile\n" +
 		strconv.Itoa(changeMasterPassword) + " - Change master password\n" +
 		strconv.Itoa(showNavigation) + " - Show navigation\n" +
@@ -87,7 +80,7 @@ func (c Command) setupMasterPassword() {
 	}
 	err := c.Storage.Init(password)
 	if err != nil {
-		fmt.Println(err)
+		panic(err)
 	}
 }
 
@@ -98,11 +91,6 @@ func (c Command) SetupStorage() {
 	}
 	if !init {
 		c.setupMasterPassword()
-	}
-	b := c.enterStorageWithMasterPassword()
-	if !b {
-		fmt.Println("Wrong password")
-		return
 	}
 }
 
@@ -128,66 +116,41 @@ func (c Command) enterStorageWithMasterPassword() bool {
 	return true
 }
 
-func (c Command) ProcessActions() {
-	for exit := false; !exit; {
-		fmt.Println("Select action: ")
-		var err error
-		exit, err = c.processAction()
-		if err != nil {
-			fmt.Println(err)
-		}
+func (c Command) ProcessActions(input int) {
+	switch input {
+	case listEntries:
+		c.getEntriesFromStorage()
+		printLongSeparator()
+	case addEntry:
+		c.createEntry()
+		printLongSeparator()
+	case getEntry:
+		c.getEntry()
+		printLongSeparator()
+	case deleteEntry:
+		c.deleteEntry()
+		printLongSeparator()
+	case changeMasterPassword:
+		c.changeMasterPassword()
+		printLongSeparator()
+	case showNavigation:
+		c.ShowNavigation()
+		printLongSeparator()
+	case exit:
+		exitApp()
+	default:
+		fmt.Println("Unknown action")
+		printLongSeparator()
 	}
 }
 
-func (c Command) processAction() (bool, error) {
-	reader := bufio.NewReader(os.Stdin)
-	input, _ := reader.ReadString('\n')
-	u64Input, err := strconv.ParseUint(
-		strings.ReplaceAll(input,
-			"\n",
-			"",
-		), 10, 64)
-	if err != nil {
-		fmt.Println("Invalid input")
-		fmt.Println(err)
-		return false, nil
-	}
+func (c Command) TimeoutMessage() {
+	fmt.Println("Timeout reached, bye!")
+}
 
-	switch uint(u64Input) {
-	case listEntries:
-		err = c.getEntriesFromStorage()
-		printLongSeparator()
-		if err != nil {
-			fmt.Println(err)
-			return false, err
-		}
-		return false, nil
-	case addEntry:
-		err = c.createEntry()
-		fmt.Println("Add entry")
-		return false, nil
-	case getEntry:
-		err = c.getEntry()
-		fmt.Println("Get entry")
-		return false, nil
-	case deleteEntry:
-		err = c.deleteEntry()
-		fmt.Println("Delete entry")
-		return false, nil
-	case changeMasterPassword:
-		err = c.changeMasterPassword()
-		fmt.Println("Change master password")
-		return false, nil
-	case showNavigation:
-		c.showNavigation()
-		return false, nil
-	case exit:
-		fmt.Println("Exit")
-		return true, nil
-	default:
-		fmt.Println("Unknown action")
-		return false, nil
-	}
+func exitApp() {
+	fmt.Println("Bye!")
+	os.Exit(0)
 }
 
 func printLongSeparator() {
