@@ -48,7 +48,7 @@ func (c Command) ShowNavigation() {
 	fmt.Printf("Available actions:\n\n" +
 		strconv.Itoa(listEntries) + " - List entries for profile\n" +
 		strconv.Itoa(getEntry) + " - Get entry for profile\n" +
-		strconv.Itoa(addEntry) + "- Add entry for profile\n" +
+		strconv.Itoa(addEntry) + " - Add entry for profile\n" +
 		strconv.Itoa(deleteEntry) + " - Delete entry for profile\n" +
 		strconv.Itoa(changeMasterPassword) + " - Change master password\n" +
 		strconv.Itoa(showNavigation) + " - Show navigation\n" +
@@ -67,7 +67,7 @@ func (c Command) setupMasterPassword() {
 			repeatByteInput, _ := term.ReadPassword(syscall.Stdin)
 			repeatPassword := string(repeatByteInput)
 			if password == repeatPassword {
-				fmt.Println("Password accepted")
+				fmt.Println("\n\nPassword accepted, please log in")
 				printLongSeparator()
 				return password, true
 			} else {
