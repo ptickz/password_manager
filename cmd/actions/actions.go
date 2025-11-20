@@ -7,6 +7,7 @@ import (
 	"password_manager/cmd/storage"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/alexmullins/zip"
 	"golang.org/x/term"
@@ -21,41 +22,69 @@ const showNavigation int = 9
 const exit int = 0
 
 type Command struct {
-	Storage storage.Storage
+	Storage      *storage.Storage
+	Focus        bool
+	NavigationCh chan int
+	InputCh      chan string
+	TickerCh     <-chan time.Time
 }
 
-func (c Command) createEntry() {
+func (c *Command) createEntry() {
 	fmt.Println("Creating entry...")
 }
 
-func (c Command) getEntriesFromStorage() {
-	fmt.Println("Getting entries from storage...")
+func (c *Command) getEntriesFromStorage() {
+	entries, err := c.Storage.ReadEntries()
+	if err != nil {
+		fmt.Println(err)
+	}
+	for k, v := range entries.Entries {
+		fmt.Println("\nId:", k)
+		fmt.Print("Service: ", v.ServiceName)
+		if k+1 != len(entries.Entries) {
+			printLongSeparator()
+		}
+	}
 }
 
-func (c Command) getEntry() {
-	fmt.Println("Getting entry...")
+func (c *Command) getEntry() {
+	fmt.Print("Input entry id: ")
+	input := <-c.InputCh
+	n, err := strconv.Atoi(input)
+	if err == nil {
+		var obj *storage.Entry
+		obj, err = c.Storage.ReadEntry(n)
+		if err == nil && &obj != nil {
+			fmt.Println("\nService: ", obj.ServiceName)
+			fmt.Println("Login: ", obj.Login)
+			fmt.Println("Password: ", obj.Password)
+		}
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
 }
 
-func (c Command) deleteEntry() {
+func (c *Command) deleteEntry() {
 	fmt.Println("Deleting entry...")
 }
 
-func (c Command) changeMasterPassword() {
+func (c *Command) changeMasterPassword() {
 	fmt.Println("Changing master password...")
 }
 
-func (c Command) ShowNavigation() {
+func (c *Command) ShowNavigation() {
 	fmt.Printf("Available actions:\n\n" +
-		strconv.Itoa(listEntries) + " - List entries for profile\n" +
-		strconv.Itoa(getEntry) + " - Get entry for profile\n" +
-		strconv.Itoa(addEntry) + " - Add entry for profile\n" +
-		strconv.Itoa(deleteEntry) + " - Delete entry for profile\n" +
+		strconv.Itoa(listEntries) + " - List entries\n" +
+		strconv.Itoa(getEntry) + " - Get entry\n" +
+		strconv.Itoa(addEntry) + " - Add entry\n" +
+		strconv.Itoa(deleteEntry) + " - Delete entry\n" +
 		strconv.Itoa(changeMasterPassword) + " - Change master password\n" +
 		strconv.Itoa(showNavigation) + " - Show navigation\n" +
 		strconv.Itoa(exit) + " - Exit\n\n")
 }
 
-func (c Command) setupMasterPassword() {
+func (c *Command) setupMasterPassword() {
 	password := ""
 	successfulPasswordSetup := false
 	for successfulPasswordSetup == false {
@@ -84,7 +113,7 @@ func (c Command) setupMasterPassword() {
 	}
 }
 
-func (c Command) SetupStorage() {
+func (c *Command) SetupStorage() {
 	init, err := c.Storage.CheckStorageInitiated()
 	if err != nil {
 		panic(err)
@@ -94,15 +123,16 @@ func (c Command) SetupStorage() {
 	}
 }
 
-func (c Command) AuthInStorage() {
-	b := c.enterStorageWithMasterPassword()
-	if !b {
-		fmt.Println("Wrong password")
-		return
+func (c *Command) AuthInStorage() {
+	for access := false; !access; {
+		access = c.enterStorageWithMasterPassword()
+		if !access {
+			fmt.Println("Wrong password")
+		}
 	}
 }
 
-func (c Command) enterStorageWithMasterPassword() bool {
+func (c *Command) enterStorageWithMasterPassword() bool {
 	fmt.Println("Enter password. Ctrl+C to exit")
 	byteInput, err := term.ReadPassword(syscall.Stdin)
 	password := string(byteInput)
@@ -113,46 +143,64 @@ func (c Command) enterStorageWithMasterPassword() bool {
 		}
 		return false
 	}
+	c.Storage.MasterPassword = &password
 	return true
 }
 
-func (c Command) ProcessActions(input int) {
+func (c *Command) ProcessActions(input int) {
+	if c.Focus == true {
+		return
+	}
 	switch input {
 	case listEntries:
 		c.getEntriesFromStorage()
 		printLongSeparator()
+		await()
 	case addEntry:
+		c.Focus = true
 		c.createEntry()
 		printLongSeparator()
+		await()
+		c.Focus = false
 	case getEntry:
+		c.Focus = true
 		c.getEntry()
 		printLongSeparator()
+		await()
+		c.Focus = false
 	case deleteEntry:
+		c.Focus = true
 		c.deleteEntry()
 		printLongSeparator()
+		await()
+		c.Focus = false
 	case changeMasterPassword:
+		c.Focus = true
 		c.changeMasterPassword()
 		printLongSeparator()
+		await()
+		c.Focus = false
 	case showNavigation:
 		c.ShowNavigation()
 		printLongSeparator()
+		await()
 	case exit:
-		exitApp()
+		fmt.Println("Bye!")
+		os.Exit(0)
 	default:
 		fmt.Println("Unknown action")
 		printLongSeparator()
 	}
 }
 
-func (c Command) TimeoutMessage() {
+func await() {
+	fmt.Println("\nAwaiting input...")
+}
+
+func (c *Command) TimeoutMessage() {
 	fmt.Println("Timeout reached, bye!")
 }
 
-func exitApp() {
-	fmt.Println("Bye!")
-	os.Exit(0)
-}
-
 func printLongSeparator() {
-	fmt.Println("\n----------------------------------------------------")
+	fmt.Print("\n----------------------------------------------------")
 }

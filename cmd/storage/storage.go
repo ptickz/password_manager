@@ -35,14 +35,13 @@ type Entries struct {
 }
 
 type Entry struct {
-	Id          uint   `json:"id"`
-	ServiceName string `json:"service_name"`
-	Login       string `json:"login"`
-	Password    string `json:"password"`
+	ServiceName string `json:"service_name,omitempty"`
+	Login       string `json:"login,omitempty"`
+	Password    string `json:"password,omitempty"`
 }
 
-func GetStorage() Storage {
-	return Storage{
+func GetStorage() *Storage {
+	return &Storage{
 		MasterPassword: nil,
 		DirPath:        "./storage",
 		ZipFile:        "data.zip",
@@ -140,12 +139,13 @@ func (s Storage) ReadEntries() (*Entries, error) {
 	return nil, err
 }
 
-func (s Storage) ReadEntry(id uint) (*Entry, error) {
+func (s Storage) ReadEntry(id int) (*Entry, error) {
 	b, err := s.extractStorageData()
 	if err == nil && b != nil {
-		var data Entry
+		var data Entries
+		err = json.Unmarshal(b.Bytes(), &data)
 
-		return &data, nil
+		return &data.Entries[id], nil
 	}
 
 	return nil, err
