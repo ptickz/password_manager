@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/alexmullins/zip"
+	"golang.design/x/clipboard"
 	"golang.org/x/term"
 )
 
@@ -58,6 +59,18 @@ func (c *Command) getEntry() {
 			fmt.Println("\nService: ", obj.ServiceName)
 			fmt.Println("Login: ", obj.Login)
 			fmt.Println("Password: ", obj.Password)
+
+			fmt.Println("Do you want to copy to  clipboard? Y/n")
+			input = <-c.InputCh
+			if input == "Y" {
+				err = clipboard.Init()
+				if err != nil {
+					fmt.Println(err)
+				} else {
+					clipboard.Write(clipboard.FmtText, []byte(obj.Password))
+				}
+				fmt.Println("Copied!")
+			}
 		}
 		if err != nil {
 			fmt.Println(err)
