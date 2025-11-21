@@ -49,9 +49,9 @@ func GetStorage() *Storage {
 	}
 }
 
-func (s Storage) Init(password string) error {
+func (s Storage) Init(password string, data *[]byte) error {
 	if _, err := os.Stat(s.DirPath); errors.Is(err, os.ErrNotExist) {
-		err = os.Mkdir(s.DirPath, os.ModePerm)
+		err = os.Mkdir(s.DirPath, os.FileMode(0755))
 		if err != nil {
 			return err
 		}
@@ -73,7 +73,11 @@ func (s Storage) Init(password string) error {
 	if err != nil {
 		log.Fatal(err)
 	}
-	_, err = io.Copy(w, bytes.NewReader([]byte(`{"entries":[]}`)))
+	if data == nil {
+		placeholder := []byte(`{"entries":[]}`)
+		data = &placeholder
+	}
+	_, err = io.Copy(w, bytes.NewReader(*data))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -151,16 +155,50 @@ func (s Storage) ReadEntry(id int) (*Entry, error) {
 	return nil, err
 }
 
-func (s Storage) WriteEntry(data *Entry) error {
-	return nil
+func (s Storage) WriteEntry(newEntry *Entry) error {
+	b, err := s.extractStorageData()
+	if err == nil && b != nil {
+		var data Entries
+		err = json.Unmarshal(b.Bytes(), &data)
+		if err == nil {
+			data.Entries = append(data.Entries, *newEntry)
+			var byteString []byte
+			byteString, err = json.Marshal(data)
+			if err == nil {
+				err = s.rewriteStorageData(byteString, s.MasterPassword)
+				return err
+			}
+		}
+	}
+	return err
 }
 
-func (s Storage) DeleteEntry(id uint) error {
-	return nil
+func (s Storage) DeleteEntry(id int) error {
+	b, err := s.extractStorageData()
+	if err == nil && b != nil {
+		var data Entries
+		err = json.Unmarshal(b.Bytes(), &data)
+		if err == nil {
+			data.Entries = append(data.Entries[:id], data.Entries[id+1:]...)
+			var byteString []byte
+			byteString, err = json.Marshal(data)
+			if err == nil {
+				err = s.rewriteStorageData(byteString, s.MasterPassword)
+				return err
+			}
+
+		}
+	}
+	return err
 }
 
 func (s Storage) ChangeMasterPassword(password string) error {
-	return nil
+	data, err := s.extractStorageData()
+	if err == nil {
+		data.Bytes()
+		err = s.rewriteStorageData(data.Bytes(), &password)
+	}
+	return err
 }
 
 func (s Storage) extractStorageData() (*bytes.Buffer, error) {
@@ -208,4 +246,15 @@ func (s Storage) extractStorageData() (*bytes.Buffer, error) {
 	}
 
 	return nil, err
+}
+
+func (s Storage) rewriteStorageData(byteString []byte, password *string) error {
+	err := os.Remove(filepath.Join(s.DirPath, s.ZipFile))
+	if err == nil {
+		err = s.Init(*password, &byteString)
+		if err != nil {
+			return err
+		}
+	}
+	return err
 }

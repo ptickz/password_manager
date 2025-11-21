@@ -31,7 +31,21 @@ type Command struct {
 }
 
 func (c *Command) createEntry() {
-	fmt.Println("Creating entry...")
+	fmt.Println("Input service name:")
+	serviceNameInput := <-c.InputCh
+	fmt.Println("Input login:")
+	loginInput := <-c.InputCh
+	fmt.Println("Input password:")
+	passwordInput := <-c.InputCh
+	newEntry := storage.Entry{
+		ServiceName: serviceNameInput,
+		Login:       loginInput,
+		Password:    passwordInput,
+	}
+	err := c.Storage.WriteEntry(&newEntry)
+	if err != nil {
+		return
+	}
 }
 
 func (c *Command) getEntriesFromStorage() {
@@ -39,12 +53,16 @@ func (c *Command) getEntriesFromStorage() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	for k, v := range entries.Entries {
-		fmt.Println("\nId:", k)
-		fmt.Print("Service: ", v.ServiceName)
-		if k+1 != len(entries.Entries) {
-			printLongSeparator()
+	if len(entries.Entries) > 0 {
+		for k, v := range entries.Entries {
+			fmt.Println("\nId:", k)
+			fmt.Print("Service: ", v.ServiceName)
+			if k+1 != len(entries.Entries) {
+				printLongSeparator()
+			}
 		}
+	} else {
+		fmt.Println(err)
 	}
 }
 
@@ -80,10 +98,46 @@ func (c *Command) getEntry() {
 
 func (c *Command) deleteEntry() {
 	fmt.Println("Deleting entry...")
+	fmt.Print("Input entry id: ")
+	input := <-c.InputCh
+	n, err := strconv.Atoi(input)
+	if err == nil {
+		err = c.Storage.DeleteEntry(n)
+		if err == nil {
+			fmt.Print(`Done`)
+		}
+	}
+	if err != nil {
+		fmt.Println(err)
+	}
 }
 
 func (c *Command) changeMasterPassword() {
-	fmt.Println("Changing master password...")
+	fmt.Println("Enter master password: ")
+	_, err := c.Storage.CheckAccess(<-c.InputCh)
+	if err != nil {
+		if !errors.Is(err, zip.ErrPassword) {
+			fmt.Println(err)
+		} else {
+			fmt.Print("Wrong password!")
+			return
+		}
+	}
+	fmt.Println("Input new master password: ")
+	password, _ := <-c.InputCh
+	fmt.Println("Repeat password: ")
+	repeatPassword, _ := <-c.InputCh
+	if password == repeatPassword {
+		err = c.Storage.ChangeMasterPassword(password)
+		if err != nil {
+			fmt.Println(err)
+		}
+	} else {
+		fmt.Println("Passwords not matching, try again")
+		return
+	}
+
+	fmt.Println("Successfully changed, you need to restart application")
 }
 
 func (c *Command) ShowNavigation() {
@@ -120,7 +174,7 @@ func (c *Command) setupMasterPassword() {
 		}
 		password, successfulPasswordSetup = f()
 	}
-	err := c.Storage.Init(password)
+	err := c.Storage.Init(password, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -190,9 +244,9 @@ func (c *Command) ProcessActions(input int) {
 	case changeMasterPassword:
 		c.Focus = true
 		c.changeMasterPassword()
-		printLongSeparator()
-		await()
 		c.Focus = false
+		fmt.Println("Bye!")
+		os.Exit(0)
 	case showNavigation:
 		c.ShowNavigation()
 		printLongSeparator()
