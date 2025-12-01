@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"password_manager/cmd/storage"
+	"password_manager/internal/storage"
 	"strconv"
 	"syscall"
 	"time"
@@ -14,17 +14,20 @@ import (
 	"golang.org/x/term"
 )
 
-const listEntries int = 1
-const getEntry int = 2
-const addEntry int = 3
-const deleteEntry int = 4
-const changeMasterPassword int = 5
-const showNavigation int = 9
-const exit int = 0
+const (
+	listEntries int = iota + 1
+	getEntry
+	addEntry
+	deleteEntry
+	changeMasterPassword
+	showNavigation
+	exit = 0
+)
 
 type Command struct {
 	Storage      *storage.Storage
 	Focus        bool
+	ScannerState bool
 	NavigationCh chan int
 	InputCh      chan string
 	TickerCh     <-chan time.Time
@@ -114,7 +117,13 @@ func (c *Command) deleteEntry() {
 
 func (c *Command) changeMasterPassword() {
 	fmt.Println("Enter master password: ")
-	_, err := c.Storage.CheckAccess(<-c.InputCh)
+	oldBytePassword, err := term.ReadPassword(syscall.Stdin)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	oldStringPassword := string(oldBytePassword)
+	_, err = c.Storage.CheckAccess(oldStringPassword)
 	if err != nil {
 		if !errors.Is(err, zip.ErrPassword) {
 			fmt.Println(err)
@@ -123,18 +132,21 @@ func (c *Command) changeMasterPassword() {
 			return
 		}
 	}
-	fmt.Println("Input new master password: ")
-	password, _ := <-c.InputCh
-	fmt.Println("Repeat password: ")
-	repeatPassword, _ := <-c.InputCh
-	if password == repeatPassword {
-		err = c.Storage.ChangeMasterPassword(password)
-		if err != nil {
-			fmt.Println(err)
+	for successInput := false; !successInput; {
+		fmt.Println("Input new master password: ")
+		newPassword, _ := term.ReadPassword(syscall.Stdin)
+		fmt.Println("Repeat password: ")
+		newRepeatPassword, _ := term.ReadPassword(syscall.Stdin)
+		if string(newPassword) == string(newRepeatPassword) {
+			successInput = true
+			err = c.Storage.ChangeMasterPassword(string(newPassword))
+			if err != nil {
+				fmt.Println(err)
+			}
+		} else {
+			fmt.Println("Passwords not matching, try again")
+			return
 		}
-	} else {
-		fmt.Println("Passwords not matching, try again")
-		return
 	}
 
 	fmt.Println("Successfully changed, you need to restart application")
@@ -152,7 +164,7 @@ func (c *Command) ShowNavigation() {
 }
 
 func (c *Command) setupMasterPassword() {
-	password := ""
+	var password string
 	successfulPasswordSetup := false
 	for successfulPasswordSetup == false {
 		f := func() (string, bool) {
@@ -242,9 +254,8 @@ func (c *Command) ProcessActions(input int) {
 		await()
 		c.Focus = false
 	case changeMasterPassword:
-		c.Focus = true
+		c.ScannerState = false
 		c.changeMasterPassword()
-		c.Focus = false
 		fmt.Println("Bye!")
 		os.Exit(0)
 	case showNavigation:

@@ -40,7 +40,7 @@ type Entry struct {
 	Password    string `json:"password,omitempty"`
 }
 
-func GetStorage() *Storage {
+func NewStorage() *Storage {
 	return &Storage{
 		MasterPassword: nil,
 		DirPath:        "./storage",
@@ -49,7 +49,7 @@ func GetStorage() *Storage {
 	}
 }
 
-func (s Storage) Init(password string, data *[]byte) error {
+func (s *Storage) Init(password string, data *[]byte) error {
 	if _, err := os.Stat(s.DirPath); errors.Is(err, os.ErrNotExist) {
 		err = os.Mkdir(s.DirPath, os.FileMode(0755))
 		if err != nil {
@@ -88,7 +88,7 @@ func (s Storage) Init(password string, data *[]byte) error {
 	return nil
 }
 
-func (s Storage) CheckStorageInitiated() (bool, error) {
+func (s *Storage) CheckStorageInitiated() (bool, error) {
 	_, err := os.Stat(filepath.Join(s.DirPath, s.ZipFile))
 
 	if err != nil {
@@ -101,7 +101,7 @@ func (s Storage) CheckStorageInitiated() (bool, error) {
 	return true, nil
 }
 
-func (s Storage) CheckAccess(password string) (bool, error) {
+func (s *Storage) CheckAccess(password string) (bool, error) {
 	r, err := zip.OpenReader(filepath.Join(s.DirPath, s.ZipFile))
 	if err != nil {
 		log.Fatal(err)
@@ -131,7 +131,7 @@ func (s Storage) CheckAccess(password string) (bool, error) {
 	return false, err
 }
 
-func (s Storage) ReadEntries() (*Entries, error) {
+func (s *Storage) ReadEntries() (*Entries, error) {
 	b, err := s.extractStorageData()
 	if err == nil && b != nil {
 		var data Entries
@@ -143,7 +143,7 @@ func (s Storage) ReadEntries() (*Entries, error) {
 	return nil, err
 }
 
-func (s Storage) ReadEntry(id int) (*Entry, error) {
+func (s *Storage) ReadEntry(id int) (*Entry, error) {
 	b, err := s.extractStorageData()
 	if err == nil && b != nil {
 		var data Entries
@@ -155,7 +155,7 @@ func (s Storage) ReadEntry(id int) (*Entry, error) {
 	return nil, err
 }
 
-func (s Storage) WriteEntry(newEntry *Entry) error {
+func (s *Storage) WriteEntry(newEntry *Entry) error {
 	b, err := s.extractStorageData()
 	if err == nil && b != nil {
 		var data Entries
@@ -173,7 +173,7 @@ func (s Storage) WriteEntry(newEntry *Entry) error {
 	return err
 }
 
-func (s Storage) DeleteEntry(id int) error {
+func (s *Storage) DeleteEntry(id int) error {
 	b, err := s.extractStorageData()
 	if err == nil && b != nil {
 		var data Entries
@@ -192,7 +192,7 @@ func (s Storage) DeleteEntry(id int) error {
 	return err
 }
 
-func (s Storage) ChangeMasterPassword(password string) error {
+func (s *Storage) ChangeMasterPassword(password string) error {
 	data, err := s.extractStorageData()
 	if err == nil {
 		data.Bytes()
@@ -201,7 +201,7 @@ func (s Storage) ChangeMasterPassword(password string) error {
 	return err
 }
 
-func (s Storage) extractStorageData() (*bytes.Buffer, error) {
+func (s *Storage) extractStorageData() (*bytes.Buffer, error) {
 	init, err := s.CheckStorageInitiated()
 	if err != nil || !init {
 		return nil, err
@@ -248,7 +248,7 @@ func (s Storage) extractStorageData() (*bytes.Buffer, error) {
 	return nil, err
 }
 
-func (s Storage) rewriteStorageData(byteString []byte, password *string) error {
+func (s *Storage) rewriteStorageData(byteString []byte, password *string) error {
 	err := os.Remove(filepath.Join(s.DirPath, s.ZipFile))
 	if err == nil {
 		err = s.Init(*password, &byteString)
