@@ -61,7 +61,12 @@ func (a *App) Run() error {
 		return errors.New("could not connect to storage")
 	}
 	model := models.NewEntryModel(conn)
-	go a.transport.StartInputScanner()
+	go func() {
+		err = a.transport.StartInputScanner()
+		if err != nil {
+			panic(err)
+		}
+	}()
 	ch := *a.transport.GetChannels()
 	for {
 		a.transport.SendMessageToUser(message.NewLine)

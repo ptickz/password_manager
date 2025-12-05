@@ -7,7 +7,7 @@ type Channels struct {
 
 type Core interface {
 	GetPasswordHidden() (string, error)
-	StartInputScanner()
+	StartInputScanner() error
 	SendMessageToUser(message string)
 	GetChannels() *Channels
 	SwitchFocus(b bool)

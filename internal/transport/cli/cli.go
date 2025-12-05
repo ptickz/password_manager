@@ -24,7 +24,7 @@ func NewCli() *Cli {
 	}
 }
 
-func (c *Cli) StartInputScanner() {
+func (c *Cli) StartInputScanner() error {
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		if c.Focus {
@@ -39,8 +39,9 @@ func (c *Cli) StartInputScanner() {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		panic(err)
+		return err
 	}
+	return nil
 }
 
 func (c *Cli) SendMessageToUser(message string) {
