@@ -4,6 +4,8 @@ go 1.25.3
 
 require (
 	github.com/alexmullins/zip v0.0.0-20180717182244-4affb64b04d0
+	github.com/joho/godotenv v1.5.1
+	github.com/mattn/go-sqlite3 v1.14.32
 	golang.design/x/clipboard v0.7.1
 	golang.org/x/term v0.37.0
 )
