@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+
 	_ "github.com/mutecomm/go-sqlcipher/v4"
 )
 

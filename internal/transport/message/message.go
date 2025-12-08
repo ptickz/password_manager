@@ -11,11 +11,13 @@ const (
 	RequestServiceLogin    = "Enter login: "
 	RequestServicePassword = "Enter password: "
 	CreationSuccess        = "Entry created successfully"
-	PasswordMismatch       = "Entered password are not matching"
 
-	WrongId        = "Provided wrong id, entry not found\n"
-	WrongActionId  = "No action corresponds to given input, try again!\n"
-	UnhandledError = "Encountered error: "
+	WrongId          = "Provided wrong id, entry not found"
+	WrongActionId    = "No action corresponds to given input, try again!"
+	PasswordMismatch = "Entered password are not matching"
+	UnhandledError   = "Encountered error: "
+	NoEntriesFound   = "No entries found"
+	WrongPassword    = "Wrong password"
 
 	NewLine       = "\n"
 	LongSeparator = "--------------------------------------------\n"

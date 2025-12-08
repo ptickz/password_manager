@@ -24,8 +24,8 @@ const (
 	UpdateEntry
 	DeleteEntry
 
-	ChangeMasterPassword = 9
-	Exit                 = 0
+	//ChangeMasterPassword = 9
+	Exit = 0
 )
 
 type App struct {
@@ -41,40 +41,67 @@ func (a *App) Run(stop context.CancelFunc) {
 		a.transport.SendMessageToUser(message.UnhandledError + err.Error())
 		stop()
 	}
+	var hiddenString string
 	if !exists {
-		a.transport.SendMessageToUser(message.FirstTimeEnter)
-		hiddenString, err := a.transport.GetPasswordHidden()
-		if err != nil {
-			a.transport.SendMessageToUser(message.UnhandledError + err.Error())
-			stop()
+		var hiddenStringRepeat string
+
+		for mismatch := true; mismatch; {
+			a.transport.SendMessageToUser(message.FirstTimeEnter)
+			hiddenString, err = a.transport.GetPasswordHidden()
+			if err != nil {
+				a.transport.SendMessageToUser(message.UnhandledError + err.Error())
+				stop()
+			}
+			a.transport.SendMessageToUser(message.NewLine + message.RepeatMasterPassword)
+			hiddenStringRepeat, err = a.transport.GetPasswordHidden()
+			if err != nil {
+				a.transport.SendMessageToUser(message.UnhandledError + err.Error())
+				stop()
+			}
+			if hiddenStringRepeat == hiddenString {
+				mismatch = false
+			} else {
+				a.transport.SendMessageToUser(message.NewLine + message.PasswordMismatch + message.NewLine + message.LongSeparator)
+			}
 		}
 		err = a.storage.Init(hiddenString)
 		if err != nil {
 			a.transport.SendMessageToUser(message.UnhandledError + err.Error())
 			stop()
 		}
+		a.transport.SendMessageToUser(message.NewLine + message.LongSeparator + message.NewLine)
 	}
-	a.transport.SendMessageToUser(message.AuthWithPassword)
-	hiddenString, err := a.transport.GetPasswordHidden()
-	if err != nil {
-		a.transport.SendMessageToUser(message.UnhandledError + err.Error())
-		stop()
+	for auth := false; !auth; {
+		a.transport.SendMessageToUser(message.AuthWithPassword)
+		hiddenString, err = a.transport.GetPasswordHidden()
+		if err != nil {
+			a.transport.SendMessageToUser(message.UnhandledError + err.Error())
+			stop()
+		}
+		err = a.storage.Connect(hiddenString)
+		if err != nil {
+			if err.Error() == "file is not a database" {
+				a.transport.SendMessageToUser(message.NewLine + message.WrongPassword + message.NewLine + message.LongSeparator)
+			} else {
+				a.transport.SendMessageToUser(message.UnhandledError + err.Error())
+				stop()
+			}
+		} else {
+			auth = true
+			a.transport.SendMessageToUser(message.NewLine + message.LongSeparator + message.NewLine)
+		}
 	}
-	err = a.storage.Connect(hiddenString)
-	if err != nil {
-		a.transport.SendMessageToUser(message.UnhandledError + err.Error())
-		stop()
-	}
+
 	conn := a.storage.GetConnection()
 	if conn == nil {
-		a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+		a.transport.SendMessageToUser(message.UnhandledError + err.Error())
 		stop()
 	}
 	model := models.NewEntryModel(conn)
 	go func() {
 		err = a.transport.StartInputScanner()
 		if err != nil {
-			a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+			a.transport.SendMessageToUser(message.UnhandledError + err.Error())
 			stop()
 		}
 	}()
@@ -88,8 +115,11 @@ func (a *App) Run(stop context.CancelFunc) {
 				var list []models.Entry
 				list, err = model.List()
 				if err != nil {
-					a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+					a.transport.SendMessageToUser(message.UnhandledError + err.Error())
 					stop()
+				}
+				if len(list) == 0 {
+					a.transport.SendMessageToUser(message.NoEntriesFound)
 				}
 				for _, entry := range list {
 					a.transport.SendMessageToUser(message.LongSeparator)
@@ -103,7 +133,7 @@ func (a *App) Run(stop context.CancelFunc) {
 				input := <-ch.InputCh
 				inputId, err = strconv.Atoi(input)
 				if err != nil {
-					a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+					a.transport.SendMessageToUser(message.UnhandledError + err.Error())
 					stop()
 				}
 				var entry *models.Entry
@@ -113,12 +143,20 @@ func (a *App) Run(stop context.CancelFunc) {
 						a.transport.SendMessageToUser(message.LongSeparator + message.WrongId + message.LongSeparator)
 						a.transport.SwitchFocus(false)
 					} else {
-						a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+						a.transport.SendMessageToUser(message.UnhandledError + err.Error())
 						stop()
 					}
 				} else {
 					a.transport.SendMessageToUser(message.LongSeparator)
-					a.transport.SendMessageToUser(fmt.Sprintf("Id: %#v\nService name:%#v\n", entry.Id, entry.ServiceName))
+					a.transport.SendMessageToUser(
+						fmt.Sprintf(
+							"Id: %#v\nService name:%#v\nLogin: %#v\nPassword: %#v\n",
+							entry.Id,
+							entry.ServiceName,
+							entry.Login,
+							entry.Password,
+						),
+					)
 					a.transport.SendMessageToUser(message.LongSeparator)
 				}
 				a.transport.SwitchFocus(false)
@@ -132,7 +170,7 @@ func (a *App) Run(stop context.CancelFunc) {
 				password := <-ch.InputCh
 				err = model.Create(serviceName, login, password)
 				if err != nil {
-					a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+					a.transport.SendMessageToUser(message.UnhandledError + err.Error())
 					stop()
 				}
 				a.transport.SendMessageToUser(
@@ -146,7 +184,7 @@ func (a *App) Run(stop context.CancelFunc) {
 				input := <-ch.InputCh
 				inputId, err = strconv.Atoi(input)
 				if err != nil {
-					a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+					a.transport.SendMessageToUser(message.UnhandledError + err.Error())
 					stop()
 				}
 				if model.CheckEntryExists(inputId) {
@@ -158,7 +196,7 @@ func (a *App) Run(stop context.CancelFunc) {
 					password := <-ch.InputCh
 					err = model.Update(inputId, serviceName, login, password)
 					if err != nil {
-						a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+						a.transport.SendMessageToUser(message.UnhandledError + err.Error())
 						stop()
 					}
 				} else {
@@ -171,38 +209,40 @@ func (a *App) Run(stop context.CancelFunc) {
 				input := <-ch.InputCh
 				inputId, err = strconv.Atoi(input)
 				if err != nil {
-					a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+					a.transport.SendMessageToUser(message.UnhandledError + err.Error())
 					stop()
 				}
 				err = model.Delete(inputId)
 				if err != nil {
-					a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+					a.transport.SendMessageToUser(message.UnhandledError + err.Error())
 					stop()
 				}
-			case ChangeMasterPassword:
-				currentPassword, err := a.transport.GetPasswordHidden()
-				if err != nil {
-					err := a.storage.Connect(currentPassword)
-					if err != nil {
-						return
-					}
-				}
-				newPassword, err := a.transport.GetPasswordHidden()
-				if err != nil {
-					a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
-					stop()
-				}
-				repeatNewPassword, err := a.transport.GetPasswordHidden()
-				if err != nil {
-					a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
-					stop()
-				}
-				if newPassword != repeatNewPassword {
-					a.transport.SendMessageToUser(message.PasswordMismatch)
-				}
-				stop()
+			//case ChangeMasterPassword:
+			//	var currentPassword string
+			//	currentPassword, err = a.transport.GetPasswordHidden()
+			//	if err != nil {
+			//		err = a.storage.Connect(currentPassword)
+			//		if err != nil {
+			//			return
+			//		}
+			//	}
+			//	newPassword, err := a.transport.GetPasswordHidden()
+			//	if err != nil {
+			//		a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+			//		stop()
+			//	}
+			//	repeatNewPassword, err := a.transport.GetPasswordHidden()
+			//	if err != nil {
+			//		a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+			//		stop()
+			//	}
+			//	if newPassword != repeatNewPassword {
+			//		a.transport.SendMessageToUser(message.PasswordMismatch)
+			//	}
+			//	stop()
 			case Exit:
 				stop()
+				return
 			default:
 				a.transport.SendMessageToUser(message.WrongActionId)
 			}

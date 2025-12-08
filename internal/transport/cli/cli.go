@@ -3,11 +3,12 @@ package cli
 import (
 	"bufio"
 	"fmt"
-	"golang.org/x/term"
 	"os"
 	"password_manager/internal/transport"
 	"strconv"
 	"syscall"
+
+	"golang.org/x/term"
 )
 
 type Cli struct {
@@ -32,7 +33,7 @@ func (c *Cli) StartInputScanner() error {
 		} else {
 			n, err := strconv.Atoi(scanner.Text())
 			if err != nil {
-				fmt.Println("Wrong input")
+				c.NavigationCh <- 1000
 			} else {
 				c.NavigationCh <- n
 				if n == 9 {

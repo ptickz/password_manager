@@ -5,11 +5,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	_ "github.com/mutecomm/go-sqlcipher/v4"
-	"log"
 	"net/url"
 	"os"
 	"password_manager/internal/storage"
+
+	_ "github.com/mutecomm/go-sqlcipher/v4"
 )
 
 type SQLite struct {
@@ -71,12 +71,20 @@ func (s *SQLite) Init(password string) error {
 	return nil
 }
 func (s *SQLite) Connect(password string) error {
+	src := []byte(password)
+	encodedKey := make([]byte, hex.EncodedLen(len(src)))
+	hex.Encode(encodedKey, src)
+	encodedKeyString := url.QueryEscape(string(encodedKey))
 	db, err := sql.Open(
 		"sqlite3",
-		s.buildConnString(password),
+		s.buildConnString(encodedKeyString),
 	)
 	if err != nil {
-		log.Fatal(err)
+		return err
+	}
+	err = db.Ping()
+	if err != nil {
+		return err
 	}
 	s.Conn = db
 	return nil

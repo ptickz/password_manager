@@ -2,7 +2,7 @@ package models
 
 import (
 	"database/sql"
-	"errors"
+
 	_ "github.com/mutecomm/go-sqlcipher/v4"
 )
 
@@ -39,7 +39,7 @@ func (e *EntryModel) List() ([]Entry, error) {
 	var entries []Entry
 	for rows.Next() {
 		var entry Entry
-		err := rows.Scan(&entry.Id, &entry.ServiceName, &entry.Login, &entry.Password)
+		err = rows.Scan(&entry.Id, &entry.ServiceName, &entry.Login, &entry.Password)
 		if err != nil {
 			return nil, err
 		}
@@ -100,9 +100,9 @@ func (e *EntryModel) Delete(id int) error {
 func (e *EntryModel) CheckEntryExists(id int) bool {
 	var modelId int
 	err := e.Db.QueryRow(
-		"SELECT id FROM entries WHERE id = $2", id,
+		"SELECT id FROM entries WHERE id = $1", id,
 	).Scan(&modelId)
-	if !errors.Is(err, sql.ErrNoRows) {
+	if err != nil {
 		return false
 	}
 	return true

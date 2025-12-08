@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -10,16 +11,23 @@ import (
 	"syscall"
 )
 
+/*
+* TODO check for wrong password, immediate error
+* TODO change master password
+* TODO tests
+ */
 func main() {
 	ctx, stop := context.WithCancel(context.Background())
 	defer stop()
 	c, err := config.NewConfig()
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
+		os.Exit(1)
 	}
 	a, err := app.NewApp(c)
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
+		os.Exit(1)
 	}
 	go listenSignals(stop)
 	go a.Run(stop)
