@@ -254,6 +254,7 @@ func (a *App) Run(stop context.CancelFunc) {
 		case <-a.ticker.C:
 			a.transport.SendMessageToUser(message.TimeoutMessage)
 			stop()
+			return
 		}
 	}
 }
