@@ -112,6 +112,7 @@ func (a *App) Run(stop context.CancelFunc) {
 		case n := <-ch.NavigationCh:
 			switch n {
 			case GetList:
+				a.resetTicker()
 				var list []models.Entry
 				list, err = model.List()
 				if err != nil {
@@ -127,6 +128,7 @@ func (a *App) Run(stop context.CancelFunc) {
 					a.transport.SendMessageToUser(message.LongSeparator)
 				}
 			case GetEntry:
+				a.resetTicker()
 				var inputId int
 				a.transport.SwitchFocus(true)
 				a.transport.SendMessageToUser(message.RequestInputId)
@@ -161,6 +163,7 @@ func (a *App) Run(stop context.CancelFunc) {
 				}
 				a.transport.SwitchFocus(false)
 			case CreateEntry:
+				a.resetTicker()
 				a.transport.SwitchFocus(true)
 				a.transport.SendMessageToUser(message.RequestServiceName)
 				serviceName := <-ch.InputCh
@@ -178,6 +181,7 @@ func (a *App) Run(stop context.CancelFunc) {
 				)
 				a.transport.SwitchFocus(false)
 			case UpdateEntry:
+				a.resetTicker()
 				var inputId int
 				a.transport.SwitchFocus(true)
 				a.transport.SendMessageToUser(message.RequestInputId)
@@ -204,6 +208,7 @@ func (a *App) Run(stop context.CancelFunc) {
 				}
 				a.transport.SwitchFocus(false)
 			case DeleteEntry:
+				a.resetTicker()
 				var inputId int
 				a.transport.SendMessageToUser(message.RequestInputId)
 				input := <-ch.InputCh
@@ -288,6 +293,15 @@ func setupTickerInstance(c *config.Config) *time.Ticker {
 	}
 	timeout := time.Duration(configTimeout) * time.Minute
 	return time.NewTicker(timeout)
+}
+
+func (a *App) resetTicker() {
+	configTimeout, err := strconv.Atoi(a.config.Timeout)
+	if err != nil {
+		configTimeout = 60
+	}
+	timeout := time.Duration(configTimeout) * time.Minute
+	a.ticker.Reset(timeout)
 }
 
 func setupStorageInstance(c *config.Config) (storage.Storage, error) {
