@@ -35,6 +35,9 @@ func (c *Cli) StartInputScanner() error {
 				fmt.Println("Wrong input")
 			} else {
 				c.NavigationCh <- n
+				if n == 9 {
+					break
+				}
 			}
 		}
 	}

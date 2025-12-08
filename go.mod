@@ -6,6 +6,7 @@ require (
 	github.com/alexmullins/zip v0.0.0-20180717182244-4affb64b04d0
 	github.com/joho/godotenv v1.5.1
 	github.com/mattn/go-sqlite3 v1.14.32
+	github.com/mutecomm/go-sqlcipher/v4 v4.4.2
 	golang.design/x/clipboard v0.7.1
 	golang.org/x/term v0.37.0
 )

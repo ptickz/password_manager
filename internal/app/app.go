@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -23,7 +24,8 @@ const (
 	UpdateEntry
 	DeleteEntry
 
-	Exit = 0
+	ChangeMasterPassword = 9
+	Exit                 = 0
 )
 
 type App struct {
@@ -33,52 +35,61 @@ type App struct {
 	transport transport.Core
 }
 
-func (a *App) Run() error {
+func (a *App) Run(stop context.CancelFunc) {
 	exists, err := a.storage.CheckStorageExists()
 	if err != nil {
-		return err
+		a.transport.SendMessageToUser(message.UnhandledError + err.Error())
+		stop()
 	}
 	if !exists {
 		a.transport.SendMessageToUser(message.FirstTimeEnter)
 		hiddenString, err := a.transport.GetPasswordHidden()
 		if err != nil {
-			return err
+			a.transport.SendMessageToUser(message.UnhandledError + err.Error())
+			stop()
 		}
-		//todo
-		panic(hiddenString)
+		err = a.storage.Init(hiddenString)
+		if err != nil {
+			a.transport.SendMessageToUser(message.UnhandledError + err.Error())
+			stop()
+		}
 	}
 	a.transport.SendMessageToUser(message.AuthWithPassword)
 	hiddenString, err := a.transport.GetPasswordHidden()
 	if err != nil {
-		return err
+		a.transport.SendMessageToUser(message.UnhandledError + err.Error())
+		stop()
 	}
 	err = a.storage.Connect(hiddenString)
 	if err != nil {
-		return err
+		a.transport.SendMessageToUser(message.UnhandledError + err.Error())
+		stop()
 	}
 	conn := a.storage.GetConnection()
 	if conn == nil {
-		return errors.New("could not connect to storage")
+		a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+		stop()
 	}
 	model := models.NewEntryModel(conn)
 	go func() {
 		err = a.transport.StartInputScanner()
 		if err != nil {
-			panic(err)
+			a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+			stop()
 		}
 	}()
 	ch := *a.transport.GetChannels()
 	for {
-		a.transport.SendMessageToUser(message.NewLine)
-		a.transport.SendMessageToUser(message.AwaitInput)
+		a.transport.SendMessageToUser(message.NewLine + message.AwaitInput)
 		select {
 		case n := <-ch.NavigationCh:
 			switch n {
 			case GetList:
 				var list []models.Entry
-				list, err := model.List()
+				list, err = model.List()
 				if err != nil {
-					return err
+					a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+					stop()
 				}
 				for _, entry := range list {
 					a.transport.SendMessageToUser(message.LongSeparator)
@@ -86,23 +97,24 @@ func (a *App) Run() error {
 					a.transport.SendMessageToUser(message.LongSeparator)
 				}
 			case GetEntry:
+				var inputId int
 				a.transport.SwitchFocus(true)
 				a.transport.SendMessageToUser(message.RequestInputId)
 				input := <-ch.InputCh
-				inputId, err := strconv.Atoi(input)
+				inputId, err = strconv.Atoi(input)
 				if err != nil {
-					return err
+					a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+					stop()
 				}
-				entry, err := model.Get(inputId)
+				var entry *models.Entry
+				entry, err = model.Get(inputId)
 				if err != nil {
 					if errors.Is(err, sql.ErrNoRows) {
-						a.transport.SendMessageToUser(message.LongSeparator)
-						a.transport.SendMessageToUser(message.WrongId)
-						a.transport.SendMessageToUser(message.LongSeparator)
-
+						a.transport.SendMessageToUser(message.LongSeparator + message.WrongId + message.LongSeparator)
 						a.transport.SwitchFocus(false)
 					} else {
-						return err
+						a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+						stop()
 					}
 				} else {
 					a.transport.SendMessageToUser(message.LongSeparator)
@@ -112,26 +124,93 @@ func (a *App) Run() error {
 				a.transport.SwitchFocus(false)
 			case CreateEntry:
 				a.transport.SwitchFocus(true)
-				//todo
+				a.transport.SendMessageToUser(message.RequestServiceName)
+				serviceName := <-ch.InputCh
+				a.transport.SendMessageToUser(message.NewLine + message.RequestServiceLogin)
+				login := <-ch.InputCh
+				a.transport.SendMessageToUser(message.NewLine + message.RequestServicePassword)
+				password := <-ch.InputCh
+				err = model.Create(serviceName, login, password)
+				if err != nil {
+					a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+					stop()
+				}
+				a.transport.SendMessageToUser(
+					message.NewLine + message.CreationSuccess + message.NewLine + message.LongSeparator,
+				)
 				a.transport.SwitchFocus(false)
 			case UpdateEntry:
+				var inputId int
 				a.transport.SwitchFocus(true)
-				//todo
+				a.transport.SendMessageToUser(message.RequestInputId)
+				input := <-ch.InputCh
+				inputId, err = strconv.Atoi(input)
+				if err != nil {
+					a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+					stop()
+				}
+				if model.CheckEntryExists(inputId) {
+					a.transport.SendMessageToUser(message.NewLine + message.RequestServiceName)
+					serviceName := <-ch.InputCh
+					a.transport.SendMessageToUser(message.NewLine + message.RequestServiceLogin)
+					login := <-ch.InputCh
+					a.transport.SendMessageToUser(message.NewLine + message.RequestServicePassword)
+					password := <-ch.InputCh
+					err = model.Update(inputId, serviceName, login, password)
+					if err != nil {
+						a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+						stop()
+					}
+				} else {
+					a.transport.SendMessageToUser(message.NewLine + message.WrongId)
+				}
 				a.transport.SwitchFocus(false)
 			case DeleteEntry:
-				//todo
+				var inputId int
+				a.transport.SendMessageToUser(message.RequestInputId)
+				input := <-ch.InputCh
+				inputId, err = strconv.Atoi(input)
+				if err != nil {
+					a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+					stop()
+				}
+				err = model.Delete(inputId)
+				if err != nil {
+					a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+					stop()
+				}
+			case ChangeMasterPassword:
+				currentPassword, err := a.transport.GetPasswordHidden()
+				if err != nil {
+					err := a.storage.Connect(currentPassword)
+					if err != nil {
+						return
+					}
+				}
+				newPassword, err := a.transport.GetPasswordHidden()
+				if err != nil {
+					a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+					stop()
+				}
+				repeatNewPassword, err := a.transport.GetPasswordHidden()
+				if err != nil {
+					a.transport.SendMessageToUser(message.UnhandledError + errors.New("could not connect to storage").Error())
+					stop()
+				}
+				if newPassword != repeatNewPassword {
+					a.transport.SendMessageToUser(message.PasswordMismatch)
+				}
+				stop()
 			case Exit:
-				//todo
-				return nil
+				stop()
 			default:
 				a.transport.SendMessageToUser(message.WrongActionId)
 			}
 		case <-a.ticker.C:
 			a.transport.SendMessageToUser(message.TimeoutMessage)
-			return nil
+			stop()
 		}
 	}
-	return err
 }
 
 func NewApp(config *config.Config) (*App, error) {

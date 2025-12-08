@@ -2,12 +2,14 @@ package database
 
 import (
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	_ "github.com/mutecomm/go-sqlcipher/v4"
 	"log"
+	"net/url"
 	"os"
 	"password_manager/internal/storage"
-	"password_manager/internal/utils"
 )
 
 type SQLite struct {
@@ -36,9 +38,13 @@ func (s *SQLite) CheckStorageExists() (bool, error) {
 }
 
 func (s *SQLite) Init(password string) error {
+	src := []byte(password)
+	encodedKey := make([]byte, hex.EncodedLen(len(src)))
+	hex.Encode(encodedKey, src)
+	encodedKeyString := url.QueryEscape(string(encodedKey))
 	db, err := sql.Open(
 		"sqlite3",
-		s.buildConnString(password),
+		s.buildConnString(encodedKeyString),
 	)
 	defer func(db *sql.DB) {
 		err = db.Close()
@@ -49,9 +55,12 @@ func (s *SQLite) Init(password string) error {
 	if err != nil {
 		return err
 	}
-	absMigrationPath := utils.GetAbsolutePath(s.MigrationPath)
+	if _, err = db.Exec(fmt.Sprintf("PRAGMA key = x%s;", encodedKeyString)); err != nil {
+		return err
+	}
+
 	var sqlStatement []byte
-	sqlStatement, err = os.ReadFile(absMigrationPath)
+	sqlStatement, err = os.ReadFile(s.MigrationPath)
 	if err != nil {
 		return err
 	}
@@ -81,10 +90,9 @@ func (s *SQLite) CloseConnections() error {
 	return nil
 }
 
-func (s *SQLite) buildConnString(password string) string {
-	connString := "file:" + s.StorageFilePath +
-		"?_auth&_auth_user=" + s.StorageUsername +
-		"&_auth_pass=" + password + "&_auth_crypt=SHA256"
+func (s *SQLite) buildConnString(encodedKeyString string) string {
+	connString := s.StorageFilePath +
+		fmt.Sprintf("?_pragma_key=x%s&_pragma_cipher_page_size=4096", encodedKeyString)
 	return connString
 }
 

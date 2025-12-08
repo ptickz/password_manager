@@ -2,6 +2,8 @@ package models
 
 import (
 	"database/sql"
+	"errors"
+	_ "github.com/mutecomm/go-sqlcipher/v4"
 )
 
 type EntryModel struct {
@@ -93,4 +95,15 @@ func (e *EntryModel) Delete(id int) error {
 		return err
 	}
 	return nil
+}
+
+func (e *EntryModel) CheckEntryExists(id int) bool {
+	var modelId int
+	err := e.Db.QueryRow(
+		"SELECT id FROM entries WHERE id = $2", id,
+	).Scan(&modelId)
+	if !errors.Is(err, sql.ErrNoRows) {
+		return false
+	}
+	return true
 }
