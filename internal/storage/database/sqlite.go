@@ -123,3 +123,7 @@ func (s *SQLite) buildConnString(encodedKeyString string) string {
 func (s *SQLite) GetConnection() *sql.DB {
 	return s.Conn
 }
+
+func (s *SQLite) PingCheck() bool {
+	return s.Conn.Ping() == nil
+}

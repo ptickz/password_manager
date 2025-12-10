@@ -23,14 +23,14 @@ func main() {
 
 	c, err := config.NewConfig()
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		fmt.Printf("Unable to build config, error: %s\n", err)
+		stop()
 	}
 
 	a, err := app.NewApp(c)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		fmt.Printf("Unable to build app, error: %s\n", err)
+		stop()
 	}
 
 	go listenSignals(stop)
@@ -40,7 +40,8 @@ func main() {
 
 	err = a.GracefulShutdown()
 	if err != nil {
-		panic(err)
+		fmt.Printf("Unable to gracefully shutdown application, error: %s\n", err)
+		os.Exit(1)
 	}
 }
 

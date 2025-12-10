@@ -384,9 +384,11 @@ func setupStorageInstance(c *config.Config) (storage.Storage, error) {
 }
 
 func (a *App) GracefulShutdown() error {
-	a.ticker.Stop()
+	if a.ticker != nil {
+		a.ticker.Stop()
+	}
 
-	if a.storage != nil {
+	if a.storage != nil && a.storage.PingCheck() {
 		err := a.storage.CloseConnections()
 		if err != nil {
 			return err

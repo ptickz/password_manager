@@ -12,4 +12,5 @@ type Storage interface {
 	Connect(password string) error
 	CloseConnections() error
 	GetConnection() *sql.DB
+	PingCheck() bool
 }
