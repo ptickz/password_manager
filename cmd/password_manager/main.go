@@ -6,9 +6,10 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"syscall"
+
 	"password_manager/internal/app"
 	"password_manager/internal/config"
-	"syscall"
 )
 
 /*
@@ -19,20 +20,24 @@ import (
 func main() {
 	ctx, stop := context.WithCancel(context.Background())
 	defer stop()
+
 	c, err := config.NewConfig()
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+
 	a, err := app.NewApp(c)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+
 	go listenSignals(stop)
 	go a.Run(stop)
 
 	<-ctx.Done()
+
 	err = a.GracefulShutdown()
 	if err != nil {
 		panic(err)

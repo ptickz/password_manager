@@ -7,9 +7,10 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"password_manager/internal/storage"
 
 	_ "github.com/mutecomm/go-sqlcipher/v4"
+
+	"password_manager/internal/storage"
 )
 
 type SQLite struct {
@@ -32,8 +33,10 @@ func (s *SQLite) CheckStorageExists() (bool, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return false, nil
 		}
+
 		return false, err
 	}
+
 	return true, nil
 }
 
@@ -46,28 +49,35 @@ func (s *SQLite) Init(password string) error {
 		"sqlite3",
 		s.buildConnString(encodedKeyString),
 	)
+
 	defer func(db *sql.DB) {
 		err = db.Close()
 		if err != nil {
 			fmt.Println(err)
 		}
 	}(db)
+
 	if err != nil {
 		return err
 	}
+
 	if _, err = db.Exec(fmt.Sprintf("PRAGMA key = x%s;", encodedKeyString)); err != nil {
 		return err
 	}
 
 	var sqlStatement []byte
 	sqlStatement, err = os.ReadFile(s.MigrationPath)
+
 	if err != nil {
 		return err
 	}
+
 	_, err = db.Exec(string(sqlStatement))
+
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 func (s *SQLite) Connect(password string) error {
@@ -79,14 +89,19 @@ func (s *SQLite) Connect(password string) error {
 		"sqlite3",
 		s.buildConnString(encodedKeyString),
 	)
+
 	if err != nil {
 		return err
 	}
+
 	err = db.Ping()
+
 	if err != nil {
 		return err
 	}
+
 	s.Conn = db
+
 	return nil
 }
 
@@ -95,6 +110,7 @@ func (s *SQLite) CloseConnections() error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 

@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
+	"time"
+
 	"password_manager/internal/config"
 	"password_manager/internal/storage"
 	"password_manager/internal/storage/database"
@@ -13,8 +16,6 @@ import (
 	"password_manager/internal/transport/cli"
 	"password_manager/internal/transport/message"
 	"password_manager/internal/utils"
-	"strconv"
-	"time"
 )
 
 const (
@@ -41,43 +42,54 @@ func (a *App) Run(stop context.CancelFunc) {
 		a.transport.SendMessageToUser(message.UnhandledError + err.Error())
 		stop()
 	}
+
 	var hiddenString string
+
 	if !exists {
 		var hiddenStringRepeat string
 
 		for mismatch := true; mismatch; {
 			a.transport.SendMessageToUser(message.FirstTimeEnter)
+
 			hiddenString, err = a.transport.GetPasswordHidden()
 			if err != nil {
 				a.transport.SendMessageToUser(message.UnhandledError + err.Error())
 				stop()
 			}
+
 			a.transport.SendMessageToUser(message.NewLine + message.RepeatMasterPassword)
+
 			hiddenStringRepeat, err = a.transport.GetPasswordHidden()
 			if err != nil {
 				a.transport.SendMessageToUser(message.UnhandledError + err.Error())
 				stop()
 			}
+
 			if hiddenStringRepeat == hiddenString {
 				mismatch = false
 			} else {
 				a.transport.SendMessageToUser(message.NewLine + message.PasswordMismatch + message.NewLine + message.LongSeparator)
 			}
 		}
+
 		err = a.storage.Init(hiddenString)
 		if err != nil {
 			a.transport.SendMessageToUser(message.UnhandledError + err.Error())
 			stop()
 		}
+
 		a.transport.SendMessageToUser(message.NewLine + message.LongSeparator + message.NewLine)
 	}
+
 	for auth := false; !auth; {
 		a.transport.SendMessageToUser(message.AuthWithPassword)
+
 		hiddenString, err = a.transport.GetPasswordHidden()
 		if err != nil {
 			a.transport.SendMessageToUser(message.UnhandledError + err.Error())
 			stop()
 		}
+
 		err = a.storage.Connect(hiddenString)
 		if err != nil {
 			if err.Error() == "file is not a database" {
@@ -88,6 +100,7 @@ func (a *App) Run(stop context.CancelFunc) {
 			}
 		} else {
 			auth = true
+
 			a.transport.SendMessageToUser(message.NewLine + message.LongSeparator + message.NewLine)
 		}
 	}
@@ -97,7 +110,9 @@ func (a *App) Run(stop context.CancelFunc) {
 		a.transport.SendMessageToUser(message.UnhandledError + err.Error())
 		stop()
 	}
+
 	model := models.NewEntryModel(conn)
+
 	go func() {
 		err = a.transport.StartInputScanner()
 		if err != nil {
@@ -105,7 +120,9 @@ func (a *App) Run(stop context.CancelFunc) {
 			stop()
 		}
 	}()
+
 	ch := *a.transport.GetChannels()
+
 	for {
 		a.transport.SendMessageToUser(message.NewLine + message.AwaitInput)
 		select {
@@ -113,15 +130,19 @@ func (a *App) Run(stop context.CancelFunc) {
 			switch n {
 			case GetList:
 				a.resetTicker()
+
 				var list []models.Entry
+
 				list, err = model.List()
 				if err != nil {
 					a.transport.SendMessageToUser(message.UnhandledError + err.Error())
 					stop()
 				}
+
 				if len(list) == 0 {
 					a.transport.SendMessageToUser(message.NoEntriesFound)
 				}
+
 				for _, entry := range list {
 					a.transport.SendMessageToUser(message.LongSeparator)
 					a.transport.SendMessageToUser(fmt.Sprintf("Id: %#v\nService name:%#v\n", entry.Id, entry.ServiceName))
@@ -129,16 +150,22 @@ func (a *App) Run(stop context.CancelFunc) {
 				}
 			case GetEntry:
 				a.resetTicker()
+
 				var inputId int
+
 				a.transport.SwitchFocus(true)
 				a.transport.SendMessageToUser(message.RequestInputId)
+
 				input := <-ch.InputCh
+
 				inputId, err = strconv.Atoi(input)
 				if err != nil {
 					a.transport.SendMessageToUser(message.UnhandledError + err.Error())
 					stop()
 				}
+
 				var entry *models.Entry
+
 				entry, err = model.Get(inputId)
 				if err != nil {
 					if errors.Is(err, sql.ErrNoRows) {
@@ -161,43 +188,62 @@ func (a *App) Run(stop context.CancelFunc) {
 					)
 					a.transport.SendMessageToUser(message.LongSeparator)
 				}
+
 				a.transport.SwitchFocus(false)
 			case CreateEntry:
 				a.resetTicker()
 				a.transport.SwitchFocus(true)
 				a.transport.SendMessageToUser(message.RequestServiceName)
+
 				serviceName := <-ch.InputCh
+
 				a.transport.SendMessageToUser(message.NewLine + message.RequestServiceLogin)
+
 				login := <-ch.InputCh
+
 				a.transport.SendMessageToUser(message.NewLine + message.RequestServicePassword)
+
 				password := <-ch.InputCh
+
 				err = model.Create(serviceName, login, password)
 				if err != nil {
 					a.transport.SendMessageToUser(message.UnhandledError + err.Error())
 					stop()
 				}
+
 				a.transport.SendMessageToUser(
 					message.NewLine + message.CreationSuccess + message.NewLine + message.LongSeparator,
 				)
 				a.transport.SwitchFocus(false)
 			case UpdateEntry:
 				a.resetTicker()
+
 				var inputId int
+
 				a.transport.SwitchFocus(true)
 				a.transport.SendMessageToUser(message.RequestInputId)
+
 				input := <-ch.InputCh
+
 				inputId, err = strconv.Atoi(input)
 				if err != nil {
 					a.transport.SendMessageToUser(message.UnhandledError + err.Error())
 					stop()
 				}
+
 				if model.CheckEntryExists(inputId) {
 					a.transport.SendMessageToUser(message.NewLine + message.RequestServiceName)
+
 					serviceName := <-ch.InputCh
+
 					a.transport.SendMessageToUser(message.NewLine + message.RequestServiceLogin)
+
 					login := <-ch.InputCh
+
 					a.transport.SendMessageToUser(message.NewLine + message.RequestServicePassword)
+
 					password := <-ch.InputCh
+
 					err = model.Update(inputId, serviceName, login, password)
 					if err != nil {
 						a.transport.SendMessageToUser(message.UnhandledError + err.Error())
@@ -206,17 +252,23 @@ func (a *App) Run(stop context.CancelFunc) {
 				} else {
 					a.transport.SendMessageToUser(message.NewLine + message.WrongId)
 				}
+
 				a.transport.SwitchFocus(false)
 			case DeleteEntry:
 				a.resetTicker()
+
 				var inputId int
+
 				a.transport.SendMessageToUser(message.RequestInputId)
+
 				input := <-ch.InputCh
+
 				inputId, err = strconv.Atoi(input)
 				if err != nil {
 					a.transport.SendMessageToUser(message.UnhandledError + err.Error())
 					stop()
 				}
+
 				err = model.Delete(inputId)
 				if err != nil {
 					a.transport.SendMessageToUser(message.UnhandledError + err.Error())
@@ -254,15 +306,18 @@ func (a *App) Run(stop context.CancelFunc) {
 		case <-a.ticker.C:
 			a.transport.SendMessageToUser(message.TimeoutMessage)
 			stop()
+
 			return
 		}
 	}
 }
 
 func NewApp(config *config.Config) (*App, error) {
+	//nolint:staticcheck
 	s, err := setupStorageInstance(config)
 	t, err := setupTransportInstance(config)
 	ticker := setupTickerInstance(config)
+
 	if err != nil || s == nil || t == nil {
 		return nil, err
 	}
@@ -277,13 +332,16 @@ func NewApp(config *config.Config) (*App, error) {
 
 func setupTransportInstance(c *config.Config) (transport.Core, error) {
 	var t transport.Core
+
 	var err error
+
 	switch c.TransportType {
 	case "cli":
 		t = cli.NewCli()
 	default:
-		err = errors.New(fmt.Sprintf("unknown transport type: %s", c.TransportType))
+		err = fmt.Errorf("unknown transport type: %s", c.TransportType)
 	}
+
 	return t, err
 }
 
@@ -292,7 +350,9 @@ func setupTickerInstance(c *config.Config) *time.Ticker {
 	if err != nil {
 		configTimeout = 60
 	}
+
 	timeout := time.Duration(configTimeout) * time.Minute
+
 	return time.NewTicker(timeout)
 }
 
@@ -301,32 +361,37 @@ func (a *App) resetTicker() {
 	if err != nil {
 		configTimeout = 60
 	}
+
 	timeout := time.Duration(configTimeout) * time.Minute
 	a.ticker.Reset(timeout)
 }
 
 func setupStorageInstance(c *config.Config) (storage.Storage, error) {
 	var s storage.Storage
+
 	var err error
+
 	switch c.StorageType {
 	case "sqlite":
 		storageAbsPath := utils.GetAbsolutePath(c.StorageFilePath)
 		migrationAbsPath := utils.GetAbsolutePath(c.MigrationPath)
 		s = database.NewSQLite(c.StorageUsername, storageAbsPath, migrationAbsPath)
-		break
 	default:
-		err = errors.New(fmt.Sprintf("unknown storage type: %s", c.StorageType))
+		err = fmt.Errorf("unknown storage type: %s", c.StorageType)
 	}
+
 	return s, err
 }
 
 func (a *App) GracefulShutdown() error {
 	a.ticker.Stop()
+
 	if a.storage != nil {
 		err := a.storage.CloseConnections()
 		if err != nil {
 			return err
 		}
 	}
+
 	return nil
 }

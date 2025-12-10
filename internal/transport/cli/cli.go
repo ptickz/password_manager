@@ -4,11 +4,12 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"password_manager/internal/transport"
 	"strconv"
 	"syscall"
 
 	"golang.org/x/term"
+
+	"password_manager/internal/transport"
 )
 
 type Cli struct {
@@ -36,29 +37,35 @@ func (c *Cli) StartInputScanner() error {
 				c.NavigationCh <- 1000
 			} else {
 				c.NavigationCh <- n
+
 				if n == 9 {
 					break
 				}
 			}
 		}
 	}
+
 	if err := scanner.Err(); err != nil {
 		return err
 	}
+
 	return nil
 }
 
 func (c *Cli) SendMessageToUser(message string) {
-	fmt.Printf(message)
+	fmt.Printf("%s", message)
 }
 
 func (c *Cli) GetPasswordHidden() (string, error) {
 	passwordByte, err := term.ReadPassword(syscall.Stdin)
 	if err != nil {
 		fmt.Println(err)
+
 		return "", err
 	}
+
 	passwordString := string(passwordByte)
+
 	return passwordString, nil
 }
 

@@ -2,6 +2,7 @@ package models
 
 import (
 	"database/sql"
+	"fmt"
 
 	_ "github.com/mutecomm/go-sqlcipher/v4"
 )
@@ -30,21 +31,31 @@ func (e *EntryModel) List() ([]Entry, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+
 	defer func(rows *sql.Rows) {
 		err = rows.Close()
 		if err != nil {
-
+			fmt.Println(err)
 		}
 	}(rows)
+
 	var entries []Entry
+
 	for rows.Next() {
 		var entry Entry
 		err = rows.Scan(&entry.Id, &entry.ServiceName, &entry.Login, &entry.Password)
+
 		if err != nil {
 			return nil, err
 		}
+
 		entries = append(entries, entry)
 	}
+
 	return entries, nil
 }
 
@@ -53,9 +64,11 @@ func (e *EntryModel) Get(id int) (*Entry, error) {
 	err := e.Db.QueryRow(
 		"SELECT * FROM entries WHERE id = $2", id,
 	).Scan(&entry.Id, &entry.ServiceName, &entry.Login, &entry.Password)
+
 	if err != nil {
 		return nil, err
 	}
+
 	return &entry, nil
 }
 
@@ -69,6 +82,7 @@ func (e *EntryModel) Create(serviceName, login, password string) error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -83,6 +97,7 @@ func (e *EntryModel) Update(id int, serviceName, login, password string) error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -94,16 +109,16 @@ func (e *EntryModel) Delete(id int) error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
 func (e *EntryModel) CheckEntryExists(id int) bool {
 	var modelId int
+
 	err := e.Db.QueryRow(
 		"SELECT id FROM entries WHERE id = $1", id,
 	).Scan(&modelId)
-	if err != nil {
-		return false
-	}
-	return true
+
+	return err == nil
 }
