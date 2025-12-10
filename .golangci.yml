@@ -1,0 +1,29 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - nilnil
+    - nilerr
+    - errorlint
+    - wrapcheck
+    - bodyclose
+    - rowserrcheck
+    - staticcheck
+    - govet
+    - errcheck
+    - gosec
+
+formatters:
+  default: none
+  enable:
+    - gci
+  settings:
+    gci:
+      sections:
+        - Standard
+        - Default
+        - Prefix(password_manager)
+run:
+  timeout: 5m
+  tests: false
